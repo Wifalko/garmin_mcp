@@ -21,6 +21,8 @@ dependencies = [
 [project.scripts]
 garmin-mcp = "garmin_mcp:main"
 garmin-mcp-auth = "garmin_mcp.auth_cli:main"
+garmin-coach-sync = "garmin_mcp.coach.sync:main"
+garmin-dashboard = "garmin_mcp.coach.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/garmin_mcp"]

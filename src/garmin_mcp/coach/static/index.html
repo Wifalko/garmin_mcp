@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trener triathlonowy</title>
+<script src="/static/chart.umd.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --swim: #2a78d6; --bike: #eb6834; --run: #1baf7a; --other: #a8a69f;
+  --ctl: #2a78d6; --atl: #e87ba4; --band: rgba(42,120,214,0.12);
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b; --info: #2a78d6;
+  --good-ink: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --swim: #3987e5; --bike: #d95926; --run: #199e70; --other: #6b6a64;
+    --ctl: #3987e5; --atl: #d55181; --band: rgba(57,135,229,0.18);
+    --info: #3987e5; --good-ink: #0ca30c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+.sync { display: flex; gap: 10px; align-items: center; color: var(--ink-2); font-size: 13px; }
+button { font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--ring);
+  background: var(--surface); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--axis); }
+button:disabled { opacity: .6; cursor: default; }
+.err { color: var(--critical); }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px 18px; }
+.grid { display: grid; gap: 14px; }
+.g-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); margin-bottom: 14px; }
+.g-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 14px; }
+.g-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px; }
+@media (max-width: 900px) { .g-hero, .g-2 { grid-template-columns: 1fr; } .g-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .g-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+h2 { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+.sub { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.rec-title { font-size: 22px; font-weight: 650; margin: 6px 0 6px; display: flex; gap: 10px; align-items: center; }
+.rec-detail { color: var(--ink-2); margin: 0; }
+.dot { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; }
+.lvl-ok { background: var(--good); } .lvl-warn { background: var(--warning); }
+.lvl-alert { background: var(--critical); } .lvl-info { background: var(--info); }
+.sig { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--grid); }
+.sig:first-of-type { border-top: 0; }
+.sig .dot { margin-top: 5px; width: 9px; height: 9px; }
+.sig b { font-weight: 600; }
+.sig span { color: var(--ink-2); font-size: 13px; }
+.lvl-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.tile .k { color: var(--ink-2); font-size: 12px; }
+.tile .v { font-size: 26px; font-weight: 650; margin: 2px 0; letter-spacing: -0.01em; }
+.tile .v small { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.tile .n { color: var(--muted); font-size: 12px; }
+.chart { position: relative; height: 230px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin: -4px 0 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--axis); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--grid); }
+td.r, th.r { text-align: right; }
+.tbl-wrap { overflow-x: auto; }
+.sport { display: inline-flex; align-items: center; gap: 6px; }
+.sport i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+pre.profile { white-space: pre-wrap; font: 13px/1.5 ui-monospace, Consolas, monospace; color: var(--ink-2);
+  max-height: 260px; overflow: auto; margin: 0; }
+code { font: 12px ui-monospace, Consolas, monospace; background: var(--page); padding: 1px 5px; border-radius: 4px; }
+.empty { color: var(--muted); padding: 30px 0; text-align: center; }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 3px; }
+.tabs button { border: 0; background: transparent; padding: 6px 14px; border-radius: 7px; color: var(--ink-2); }
+.tabs button[aria-selected="true"] { background: var(--page); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--ring); }
+.head-left { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--page); }
+</style>
+<link rel="stylesheet" href="/static/coach.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="head-left">
+      <h1>Trener triathlonowy</h1>
+      <nav class="tabs" role="tablist">
+        <button role="tab" id="tabBtnDash" aria-selected="true" data-tab="dash">Pulpit</button>
+        <button role="tab" id="tabBtnCoach" aria-selected="false" data-tab="coach">Trener</button>
+        <button role="tab" id="tabBtnBody" aria-selected="false" data-tab="body">Skład ciała</button>
+      </nav>
+    </div>
+    <div class="sync"><span id="syncText">Ładowanie…</span><button id="syncBtn">Synchronizuj teraz</button></div>
+  </header>
+
+<section id="tab-dash">
+  <div class="grid g-hero">
+    <div class="card" id="recCard">
+      <div class="lvl-label">Na dziś</div>
+      <div class="rec-title"><span class="dot" id="recDot"></span><span id="recTitle">—</span></div>
+      <p class="rec-detail" id="recDetail"></p>
+    </div>
+    <div class="card"><h2>Sygnały</h2><div id="signals"></div></div>
+  </div>
+
+  <div class="grid g-tiles" id="tiles"></div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h2>Forma i zmęczenie</h2>
+      <p class="sub">CTL — forma (42 dni) · ATL — zmęczenie (7 dni), skala obciążenia Garmina</p>
+      <div class="legend"><span><i style="background:var(--ctl)"></i>Forma (CTL)</span><span><i style="background:var(--atl)"></i>Zmęczenie (ATL)</span></div>
+      <div class="chart"><canvas id="cPmc"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Świeżość (TSB = CTL − ATL)</h2>
+      <p class="sub">Poniżej zera: budujesz, mocno poniżej: przeciążenie. Powyżej: wypoczęty.</p>
+      <div class="chart"><canvas id="cTsb"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h2>Tygodniowa objętość</h2>
+      <p class="sub">Godziny na dyscyplinę, ostatnie 16 tygodni</p>
+      <div class="legend" id="sportLegend"></div>
+      <div class="chart"><canvas id="cWeekly"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Forma per dyscyplina</h2>
+      <p class="sub">CTL liczone osobno dla każdej dyscypliny</p>
+      <div class="legend" id="sportLegend2"></div>
+      <div class="chart"><canvas id="cSportCtl"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h2>HRV w nocy</h2>
+      <p class="sub">Średnia z nocy; pas = Twoja norma wyznaczona przez Garmina</p>
+      <div class="chart"><canvas id="cHrv"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Sen</h2>
+      <p class="sub">Godziny snu każdej nocy</p>
+      <div class="chart"><canvas id="cSleep"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h2>Tętno spoczynkowe</h2>
+      <p class="sub">bpm, wzrost o 5+ ponad średnią bywa pierwszym sygnałem zmęczenia</p>
+      <div class="chart"><canvas id="cRhr"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Body Battery</h2>
+      <p class="sub">Maksimum dnia (po nocy) i minimum</p>
+      <div class="legend"><span><i style="background:var(--ctl)"></i>Maksimum</span><span><i style="background:var(--other)"></i>Minimum</span></div>
+      <div class="chart"><canvas id="cBb"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h2>Ostatnie treningi</h2>
+    <p class="sub" id="loadNote"></p>
+    <div class="tbl-wrap"><table id="acts"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Profil zawodnika</h2>
+    <p class="sub">Trener czyta ten plik. Edytuj: <code id="profilePath"></code></p>
+    <pre class="profile" id="profile"></pre>
+  </div>
+</section>
+<section id="tab-body" hidden>
+  <div class="grid g-hero">
+    <div class="card">
+      <h2>Dodaj pomiary ze zdjęć</h2>
+      <p class="sub">Zdjęcia lub PDF-y wydruków z analizatora (InBody, Tanita…). Możesz wybrać od razu wiele — z kilku miesięcy. Claude odczyta wartości, a Ty możesz je potem poprawić.</p>
+      <div class="upload">
+        <label class="file-pick"><input type="file" id="bodyFiles" accept="image/*,application/pdf" multiple><span id="bodyPickTxt">Wybierz zdjęcia…</span></label>
+        <label class="date-pick">Data, jeśli nie ma jej na wydruku<input type="date" id="bodyDate"></label>
+        <button class="primary" id="bodyUpload" disabled>Odczytaj i zapisz</button>
+      </div>
+      <div id="bodyUploadStatus" class="upload-status" aria-live="polite"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Co z tego wynika</h2><button class="small" id="bodyAsk">Zapytaj trenera</button></div>
+      <div id="bodySignals"></div>
+    </div>
+  </div>
+
+  <div class="grid g-tiles" id="bodyTiles"></div>
+
+  <div class="grid g-2">
+    <div class="card"><h2>Masa ciała</h2><p class="sub">kg</p><div class="chart"><canvas id="cBodyWeight"></canvas></div></div>
+    <div class="card"><h2>Tkanka tłuszczowa</h2><p class="sub">% masy ciała</p><div class="chart"><canvas id="cBodyFat"></canvas></div></div>
+  </div>
+  <div class="grid g-2">
+    <div class="card"><h2 id="muscleTitle">Mięśnie szkieletowe</h2><p class="sub">kg</p><div class="chart"><canvas id="cBodyMuscle"></canvas></div></div>
+    <div class="card"><h2>Rozkład masy mięśniowej</h2><p class="sub" id="segSub">Ostatni pomiar, lewa vs prawa strona</p><div id="bodySegments"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Pomiary</h2>
+    <p class="sub">Kliknij „Popraw”, jeśli Claude źle odczytał jakąś wartość. Poprawione pomiary są oznaczone jako sprawdzone.</p>
+    <div class="tbl-wrap"><table id="bodyTable"></table></div>
+  </div>
+</section>
+<section id="tab-coach" hidden>
+  <div class="card plan-card">
+        <div class="card-head">
+          <div>
+            <h2>Plan treningowy</h2>
+            <p class="sub" id="planRange"></p>
+          </div>
+          <div class="btn-row">
+            <button id="weekPrev" aria-label="Poprzednie tygodnie">‹</button>
+            <button id="weekNow">Teraz</button>
+            <button id="weekNext" aria-label="Następne tygodnie">›</button>
+          </div>
+        </div>
+        <div class="plan-legend">
+          <span><i class="st st-done">✓</i>zrobione</span>
+          <span><i class="st st-missed">✕</i>opuszczone</span>
+          <span><i class="st st-skipped">–</i>pominięte</span>
+          <span><i class="st st-extra">+</i>poza planem</span>
+        </div>
+        <div class="cal" id="calendar"></div>
+        <div class="session-detail" id="sessionDetail" hidden></div>
+        <p class="empty" id="planEmpty" hidden>Plan jest pusty. Poproś trenera: „Ułóż plan na 2 tygodnie”.</p>
+      </div>
+
+  <div class="coach-grid">
+    <div class="coach-main">
+
+      <div class="card" id="actPanel" hidden></div>
+
+      <div class="card">
+        <h2>Progres i regres</h2>
+        <p class="sub">Ostatnie 4 tygodnie vs 4 tygodnie wcześniej. Wydajność liczona przy stałym tętnie, więc spokojne i mocne dni porównują się uczciwie. Na wykresach wyżej = lepiej.</p>
+        <div class="prog-grid" id="progress"></div>
+        <div class="prog-extra" id="progressExtra"></div>
+      </div>
+    </div>
+
+    <aside class="card chat" id="chatCard">
+      <div class="chat-head">
+        <h2>Rozmowa z trenerem</h2>
+        <div class="btn-row">
+          <button id="chatClear" title="Wyczyść tę rozmowę">Wyczyść</button>
+          <button id="settingsBtn" title="Połączenie z Claude">Ustawienia</button>
+        </div>
+      </div>
+      <div class="chat-ctx" id="chatCtx"></div>
+      <div class="settings" id="settings" hidden></div>
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form class="composer" id="composer">
+        <textarea id="chatInput" rows="2" placeholder="Napisz do trenera… (Enter — wyślij, Shift+Enter — nowa linia)"></textarea>
+        <button type="submit" id="sendBtn" class="primary">Wyślij</button>
+      </form>
+    </aside>
+  </div>
+</section>
+</div>
+
+<script>
+const SPORTS = [["swim","Pływanie"],["bike","Rower"],["run","Bieg"],["strength","Siła"],["other","Inne"]];
+const SPORT_PL = {swim:"Pływanie",bike:"Rower",run:"Bieg",strength:"Siła",multi:"Multisport",other:"Inne"};
+const LVL_PL = {ok:"OK", warn:"Uwaga", alert:"Alarm", info:"Info"};
+const charts = {};
+let lastData = null, pollTimer = null;
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ddmm = d => d ? d.slice(8,10) + "." + d.slice(5,7) : "";
+const fmt = (v, digits=0) => v == null ? "—" : Number(v).toFixed(digits);
+const hm = s => { if (!s) return "—"; const m = Math.round(s/60); return Math.floor(m/60) + ":" + String(m%60).padStart(2,"0"); };
+const ago = iso => { if (!iso) return "nigdy"; const m = Math.round((Date.now() - new Date(iso))/60000);
+  return m < 1 ? "przed chwilą" : m < 60 ? m + " min temu" : Math.round(m/60) + " h temu"; };
+const sportColor = s => css("--" + (["swim","bike","run"].includes(s) ? s : "other"));
+
+function baseOpts(extra = {}) {
+  const grid = css("--grid"), muted = css("--muted"), axis = css("--axis");
+  return Object.assign({
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { display: false },
+      tooltip: { backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink-2"),
+        borderColor: css("--ring"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true } },
+    scales: {
+      x: { grid: { display: false }, border: { color: axis }, ticks: { color: muted, maxRotation: 0, autoSkipPadding: 14, font: { size: 11 } } },
+      y: { grid: { color: grid }, border: { display: false }, ticks: { color: muted, font: { size: 11 }, maxTicksLimit: 5 } },
+    },
+  }, extra);
+}
+
+function draw(id, config) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+
+const line = (label, data, color, extra = {}) => Object.assign({ type: "line", label, data, borderColor: color,
+  backgroundColor: color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0.25, spanGaps: true }, extra);
+
+function render(d) {
+  lastData = d;
+  // header
+  const s = d.sync || {};
+  const st = document.getElementById("syncText");
+  if (s.running) st.textContent = "Synchronizuję z Garmin…";
+  else if (s.error) { st.innerHTML = `<span class="err">${s.error}</span>`; }
+  else st.textContent = `Ostatnia synchronizacja: ${ago(s.last_sync)}`;
+  st.title = s.message || "";
+  document.getElementById("syncBtn").disabled = !!s.running;
+
+  // recommendation + signals
+  const r = d.recommendation || {};
+  document.getElementById("recDot").className = "dot lvl-" + (r.level || "info");
+  document.getElementById("recTitle").textContent = r.title || "—";
+  document.getElementById("recDetail").textContent = r.detail || "";
+  const sig = d.signals || [];
+  document.getElementById("signals").innerHTML = sig.length ? sig.map(x =>
+    `<div class="sig"><span class="dot lvl-${x.level}" aria-hidden="true"></span><div><b>${LVL_PL[x.level]}: ${x.title}</b><br><span>${x.detail}</span></div></div>`
+  ).join("") : `<div class="empty">Brak sygnałów — za mało danych.</div>`;
+
+  // tiles
+  const t = d.today || {}, pm = (d.pmc || []).slice(-1)[0] || {};
+  const tiles = [
+    ["HRV", fmt(t.hrv_last), "ms", t.hrv_low ? `norma ${fmt(t.hrv_low)}–${fmt(t.hrv_high)}` : "brak normy"],
+    ["Tętno spocz.", fmt(t.rhr), "bpm", t.rhr__date ? ddmm(t.rhr__date) : ""],
+    ["Sen", hm(t.sleep_s), "h", t.sleep_score ? `wynik ${fmt(t.sleep_score)}` : ""],
+    ["Body Battery", fmt(t.bb_now ?? t.bb_high), "", t.bb_high ? `max ${fmt(t.bb_high)} · min ${fmt(t.bb_low)}` : ""],
+    ["Gotowość", fmt(t.readiness), "/100", (t.readiness_level || "").toLowerCase().replace(/_/g," ")],
+    ["Świeżość", pm.tsb != null ? (pm.tsb > 0 ? "+" : "") + fmt(pm.tsb) : "—", "", pm.ctl != null ? `forma ${fmt(pm.ctl)} · zmęcz. ${fmt(pm.atl)}` : ""],
+  ];
+  document.getElementById("tiles").innerHTML = tiles.map(([k,v,u,n]) =>
+    `<div class="card tile"><div class="k">${k}</div><div class="v">${v} <small>${v === "—" ? "" : u}</small></div><div class="n">${n}</div></div>`).join("");
+
+  // PMC
+  const pmc = d.pmc || [], labels = pmc.map(p => ddmm(p.date));
+  draw("cPmc", { type: "line", data: { labels, datasets: [
+    line("Forma (CTL)", pmc.map(p => p.ctl), css("--ctl")),
+    line("Zmęczenie (ATL)", pmc.map(p => p.atl), css("--atl")),
+  ]}, options: baseOpts() });
+
+  const tsbOpts = baseOpts();
+  tsbOpts.plugins.tooltip.callbacks = { label: c => ` TSB: ${c.raw > 0 ? "+" : ""}${c.raw}` };
+  draw("cTsb", { type: "bar", data: { labels, datasets: [{ label: "TSB", data: pmc.map(p => p.tsb),
+    backgroundColor: pmc.map(p => p.tsb >= 0 ? css("--ctl") : css("--bike")), borderRadius: 2, barPercentage: 0.9, categoryPercentage: 1 }] },
+    options: tsbOpts });
+
+  // weekly stacked
+  const wk = d.weekly || [];
+  const legendHtml = list => list.map(([k,n]) => `<span><i style="background:${sportColor(k)}"></i>${n}</span>`).join("");
+  document.getElementById("sportLegend").innerHTML = legendHtml(SPORTS.filter(([k]) => k !== "strength"));
+  document.getElementById("sportLegend2").innerHTML = legendHtml(SPORTS.slice(0,3));
+  const wOpts = baseOpts();
+  wOpts.scales.x.stacked = true; wOpts.scales.y.stacked = true;
+  wOpts.plugins.tooltip.callbacks = { label: c => ` ${c.dataset.label}: ${hm(c.raw * 3600)} h`,
+    footer: items => "Razem: " + hm(items.reduce((a, i) => a + (i.raw || 0), 0) * 3600) + " h" };
+  draw("cWeekly", { type: "bar", data: { labels: wk.map(w => ddmm(w.week)), datasets:
+    [["swim","Pływanie"],["bike","Rower"],["run","Bieg"],["other","Inne + siła"]].map(([k,n]) => ({
+      label: n, data: wk.map(w => k === "other" ? (w.other_h||0) + (w.strength_h||0) : (w[k+"_h"]||0)),
+      backgroundColor: sportColor(k), borderColor: css("--surface"), borderWidth: { top: 2 }, borderSkipped: "bottom",
+      borderRadius: 3, barPercentage: 0.75 })) }, options: wOpts });
+
+  draw("cSportCtl", { type: "line", data: { labels, datasets: ["swim","bike","run"].map(k =>
+    line(SPORT_PL[k], pmc.map(p => p["ctl_"+k]), sportColor(k))) }, options: baseOpts() });
+
+  // HRV
+  const daily = d.daily || [], dl = daily.map(r => ddmm(r.date));
+  draw("cHrv", { type: "line", data: { labels: dl, datasets: [
+    line("Norma od", daily.map(r => r.hrv_low), "transparent", { pointHoverRadius: 0, fill: false }),
+    line("Norma do", daily.map(r => r.hrv_high), "transparent", { pointHoverRadius: 0, fill: "-1", backgroundColor: css("--band") }),
+    line("HRV", daily.map(r => r.hrv_last), css("--ctl"), { pointRadius: 2.5 }),
+  ]}, options: baseOpts() });
+
+  const sOpts = baseOpts();
+  sOpts.plugins.tooltip.callbacks = { label: c => {
+    const row = daily[c.dataIndex]; return ` Sen: ${hm(row.sleep_s)} h` + (row.sleep_score ? ` · wynik ${row.sleep_score}` : ""); } };
+  draw("cSleep", { type: "bar", data: { labels: dl, datasets: [{ label: "Sen", data: daily.map(r => r.sleep_s ? +(r.sleep_s/3600).toFixed(2) : null),
+    backgroundColor: css("--ctl"), borderRadius: 3, barPercentage: 0.8 }] }, options: sOpts });
+
+  draw("cRhr", { type: "line", data: { labels: dl, datasets: [
+    line("Tętno spoczynkowe", daily.map(r => r.rhr), css("--atl"), { pointRadius: 2.5 }) ] }, options: baseOpts() });
+
+  draw("cBb", { type: "line", data: { labels: dl, datasets: [
+    line("Maksimum", daily.map(r => r.bb_high), css("--ctl"), { pointRadius: 2 }),
+    line("Minimum", daily.map(r => r.bb_low), css("--other"), { pointRadius: 2 }) ] },
+    options: baseOpts({ scales: { ...baseOpts().scales, y: { ...baseOpts().scales.y, min: 0, max: 100 } } }) });
+
+  // activities
+  const acts = d.activities || [];
+  const src = d.load_sources || {};
+  const est = (src.hr || 0) + (src["czas"] || 0);
+  document.getElementById("loadNote").textContent = est
+    ? `* obciążenie szacunkowe (z tętna lub czasu, LTHR ≈ ${d.lthr_estimate}) — Garmin nie podał Training Load dla ${est} treningów w tym okresie, zwykle pływania.`
+    : "Obciążenie: Training Load z Garmina.";
+  document.getElementById("acts").innerHTML = acts.length ? `<thead><tr><th>Data</th><th>Trening</th><th>Dyscyplina</th>
+    <th class="r">Czas</th><th class="r">Dystans</th><th class="r">Śr. tętno</th><th class="r">Moc</th><th class="r">Obciążenie</th></tr></thead><tbody>` +
+    acts.slice(0, 20).map(a => `<tr class="clickable" onclick="openActivity(${a.id})" title="Otwórz w zakładce Trener"><td>${ddmm(a.date)} ${a.start.slice(11,16)}</td><td>${a.name || ""}</td>
+      <td><span class="sport"><i style="background:${sportColor(a.sport)}"></i>${SPORT_PL[a.sport] || a.sport}</span></td>
+      <td class="r">${hm(a.duration_s)}</td><td class="r">${a.distance_m ? (a.sport === "swim" ? fmt(a.distance_m) + " m" : fmt(a.distance_m/1000, 1) + " km") : "—"}</td>
+      <td class="r">${fmt(a.avg_hr)}</td><td class="r">${a.norm_power ? fmt(a.norm_power) + " NP" : a.avg_power ? fmt(a.avg_power) + " W" : "—"}</td>
+      <td class="r">${fmt(a.load)}${a.load_source === "garmin" ? "" : "*"}</td></tr>`).join("") + "</tbody>"
+    : `<tr><td class="empty">Brak treningów w bazie — poczekaj na pierwszą synchronizację.</td></tr>`;
+
+  document.getElementById("profilePath").textContent = d.profile_path || "";
+  document.getElementById("profile").textContent = d.profile || "";
+}
+
+async function load() {
+  try {
+    const res = await fetch("/api/data");
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    render(d);
+    schedule(d.sync && d.sync.running ? 3000 : 60000);
+  } catch (e) {
+    document.getElementById("syncText").innerHTML = `<span class="err">Nie mogę pobrać danych: ${e.message}. Czy okno z garmin-dashboard jest otwarte?</span>`;
+    schedule(10000);
+  }
+}
+function schedule(ms) { clearTimeout(pollTimer); pollTimer = setTimeout(load, ms); }
+
+document.getElementById("syncBtn").addEventListener("click", async () => {
+  document.getElementById("syncBtn").disabled = true;
+  document.getElementById("syncText").textContent = "Synchronizuję z Garmin…";
+  await fetch("/api/sync", { method: "POST", headers: { "X-Coach": "1" } }).catch(() => {});
+  schedule(1500);
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => lastData && render(lastData));
+load();
+</script>
+<script src="/static/coach.js"></script>
+<script src="/static/body.js"></script>
+</body>
+</html>

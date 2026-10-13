@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 # configuration, so it is a write even though it does not contact Garmin.
 ADDITIVE_TOOLS = frozenset(
     {
+        "sync_coach_data",
         "add_body_composition",
         "add_gear_to_activity",
         "add_hydration_data",
@@ -47,6 +48,8 @@ ADDITIVE_TOOLS = frozenset(
 # they are deliberately not marked read-only either.
 DESTRUCTIVE_TOOLS = frozenset(
     {
+        "update_athlete_profile",
+        "update_training_plan",
         "delete_activity",
         "delete_course",
         "delete_custom_food",
@@ -77,13 +80,18 @@ DESTRUCTIVE_TOOLS = frozenset(
 # These tools are explicitly documented as safe to repeat with the same
 # arguments. Batch scheduling can also upload an inline workout, so it is
 # intentionally excluded even though its existing-workout path is guarded.
-IDEMPOTENT_TOOLS = frozenset({"schedule_week", "schedule_workout"})
+IDEMPOTENT_TOOLS = frozenset(
+    {"schedule_week", "schedule_workout", "sync_coach_data", "update_athlete_profile"}
+)
 
 
 # This is the only registered tool whose effect is strictly local. All other
 # tools either read from or write to Garmin Connect (including tools that also
 # write a local download file), so they cross an external-world boundary.
-LOCAL_ONLY_TOOLS = frozenset({"set_fit_download_dir"})
+LOCAL_ONLY_TOOLS = frozenset(
+    {"set_fit_download_dir", "get_coach_snapshot", "update_athlete_profile",
+     "get_training_plan", "update_training_plan", "get_body_scans"}
+)
 
 
 # The explicit read-only set is kept as a complement rather than inferred at
@@ -91,6 +99,9 @@ LOCAL_ONLY_TOOLS = frozenset({"set_fit_download_dir"})
 # registered tool list and fails when upstream adds a tool.
 READ_ONLY_TOOLS = frozenset(
     {
+        "get_body_scans",
+        "get_coach_snapshot",
+        "get_training_plan",
         "count_activities",
         "get_acclimation",
         "get_activities",

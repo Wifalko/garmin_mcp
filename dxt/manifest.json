@@ -260,8 +260,16 @@
       "description": "Get body composition data for a single date or date range"
     },
     {
+      "name": "get_body_scans",
+      "description": "All body-composition measurements the athlete imported from photos of analyser"
+    },
+    {
       "name": "get_calendar_events",
       "description": "Get races and events on the Garmin Connect calendar between two dates"
+    },
+    {
+      "name": "get_coach_snapshot",
+      "description": "Triathlon coach context in one call: athlete profile and goals, rule-based"
     },
     {
       "name": "get_course_details",
@@ -528,6 +536,10 @@
       "description": "Get Garmin's daily acute and chronic training load over a date range."
     },
     {
+      "name": "get_training_plan",
+      "description": "The athlete's training plan (shared with the local dashboard), each session with"
+    },
+    {
       "name": "get_training_plan_workouts",
       "description": "Compatibility alias for get_garmin_coach_workouts"
     },
@@ -660,6 +672,10 @@
       "description": "Set the perceived effort (RPE) for an activity."
     },
     {
+      "name": "sync_coach_data",
+      "description": "Pull the latest data from Garmin Connect into the local coach store"
+    },
+    {
       "name": "unschedule_workout",
       "description": "Remove a scheduled workout from the Garmin Connect calendar"
     },
@@ -668,8 +684,16 @@
       "description": "Remove multiple scheduled workouts from the Garmin Connect calendar"
     },
     {
+      "name": "update_athlete_profile",
+      "description": "Replace the athlete profile (goals, race dates, weekly hours, thresholds,"
+    },
+    {
       "name": "update_custom_food",
       "description": "Update an existing custom food in the user's Garmin nutrition library"
+    },
+    {
+      "name": "update_training_plan",
+      "description": "Add, change, move or remove sessions in the athlete's training plan (shown in the"
     },
     {
       "name": "upload_course",
