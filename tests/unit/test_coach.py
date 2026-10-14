@@ -447,3 +447,16 @@ def test_body_reaches_coach_and_mcp(coach_home, monkeypatch):
     assert len(scans["measurements"]) == 2 and "files" not in scans["measurements"][0]
     snap = json.loads(asyncio.run(call("get_coach_snapshot", {})))
     assert snap["body_composition"]["history_last_12"][-1]["weight_kg"] == 75.5
+
+
+def test_cli_auth_error_is_explained():
+    class Out:
+        stderr = "Failed to authenticate: OAuth session expired and could not be refreshed"
+        stdout = ""
+    msg = llm._cli_error(Out())
+    assert "claude auth login" in msg and "OAuth session expired" in msg
+
+    class Other:
+        stderr = "boom"
+        stdout = ""
+    assert llm._cli_error(Other()).startswith("Claude Code zakończył się błędem")

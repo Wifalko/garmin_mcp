@@ -102,9 +102,19 @@ def read_files(prompt: str, files: list, max_tokens: int = 6000) -> str:
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise LLMError(f"Nie udało się uruchomić Claude Code: {exc}") from exc
         if out.returncode != 0:
-            raise LLMError(f"Claude Code zakończył się błędem: {(out.stderr or out.stdout).strip()[:500]}")
+            raise LLMError(_cli_error(out))
         return out.stdout.strip()
     raise LLMError("Brak połączenia z Claude — ustaw klucz API albo Claude Code w zakładce Trener → Ustawienia.")
+
+
+def _cli_error(out) -> str:
+    detail = (out.stderr or out.stdout or "").strip()[:500]
+    low = detail.lower()
+    if any(k in low for k in ("authenticate", "oauth", "not logged in", "login", "401")):
+        return ("Claude Code nie jest zalogowany na tym komputerze albo sesja wygasła. "
+                "W cmd uruchom: claude auth login — zaloguj się w przeglądarce i wyślij wiadomość ponownie "
+                f"(dashboard nie wymaga restartu). Szczegóły: {detail}")
+    return f"Claude Code zakończył się błędem: {detail}"
 
 
 def _complete_api(system: str, messages: list[dict], model: str, max_tokens: int) -> str:
@@ -161,5 +171,5 @@ def _complete_cli(system: str, messages: list[dict], cli: str) -> str:
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise LLMError(f"Nie udało się uruchomić Claude Code: {exc}") from exc
     if out.returncode != 0:
-        raise LLMError(f"Claude Code zakończył się błędem: {(out.stderr or out.stdout).strip()[:500]}")
+        raise LLMError(_cli_error(out))
     return out.stdout.strip()
