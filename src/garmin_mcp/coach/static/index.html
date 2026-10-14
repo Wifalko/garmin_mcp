@@ -226,6 +226,7 @@ tr.clickable:hover td { background: var(--page); }
             <button id="weekPrev" aria-label="Poprzednie tygodnie">‹</button>
             <button id="weekNow">Teraz</button>
             <button id="weekNext" aria-label="Następne tygodnie">›</button>
+            <button id="gcalBtn" title="Synchronizacja z Kalendarzem Google">📅 Kalendarz Google</button>
           </div>
         </div>
         <div class="plan-legend">
@@ -234,6 +235,7 @@ tr.clickable:hover td { background: var(--page); }
           <span><i class="st st-skipped">–</i>pominięte</span>
           <span><i class="st st-extra">+</i>poza planem</span>
         </div>
+        <div class="gcal" id="gcalBox" hidden></div>
         <div class="cal" id="calendar"></div>
         <div class="session-detail" id="sessionDetail" hidden></div>
         <p class="empty" id="planEmpty" hidden>Plan jest pusty. Poproś trenera: „Ułóż plan na 2 tygodnie”.</p>

@@ -91,6 +91,28 @@ i ostatnie treningi.
   sam zapisuje zmiany w kalendarzu. Ten sam plan widzi Claude Desktop (`get_training_plan`,
   `update_training_plan`).
 
+## Kalendarz Google
+
+Treningi z planu mogą trafiać do Kalendarza Google jako wydarzenia całodniowe (bez godziny),
+w osobnym kalendarzu **„Trening”**. Każda zmiana planu (w dashboardzie, w czacie z trenerem
+albo z Claude Desktop) w ciągu kilku sekund dodaje, przesuwa lub usuwa wydarzenia. Po każdej
+synchronizacji z Garminem wykonane treningi dostają „✓”. Pominięte sesje i dni odpoczynku
+nie trafiają do kalendarza.
+
+Konfiguracja (raz, ok. 5 min) — Trener → Plan treningowy → „📅 Kalendarz Google”:
+1. console.cloud.google.com → nowy projekt.
+2. APIs & Services → Library → Google Calendar API → Enable.
+3. Google Auth Platform: typ External, nazwa aplikacji, Twój e-mail; w Audience **Publish app**
+   („In production”) — w trybie testowym Google unieważnia dostęp co 7 dni.
+4. Clients → Create client → **Desktop app** → wklej Client ID i Client secret w dashboardzie.
+5. „Połącz z Google” → zaloguj się. Ostrzeżenie o niezweryfikowanej aplikacji jest normalne
+   (to Twoja własna aplikacja): Zaawansowane → Przejdź do….
+
+Aplikacja prosi tylko o zakres `calendar.app.created`, czyli dostęp wyłącznie do kalendarza,
+który sama utworzyła — nie widzi Twoich innych kalendarzy. Klucz i token zapisują się lokalnie
+w `config.json`. Nie edytuj treningów ręcznie w kalendarzu „Trening” — zmiany zostaną nadpisane
+planem; zmieniaj plan w dashboardzie lub u trenera.
+
 ### Połączenie z Claude (Ustawienia w czacie)
 
 Dashboard sam wybiera jedną z dwóch dróg:

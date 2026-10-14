@@ -460,3 +460,132 @@ def test_cli_auth_error_is_explained():
         stderr = "boom"
         stdout = ""
     assert llm._cli_error(Other()).startswith("Claude Code zakończył się błędem")
+
+
+# --- Google Calendar mirror ----------------------------------------------------
+
+from garmin_mcp.coach import gcal  # noqa: E402
+
+
+class FakeGoogle:
+    """In-memory stand-in for the OAuth token endpoint and Calendar API."""
+
+    def __init__(self):
+        self.calendars, self.events, self.calls, self.cancelled = {}, {}, [], set()
+        self.token_error = None
+
+    class Resp:
+        def __init__(self, code, data=None):
+            self.status_code, self._data = code, data
+            self.content = b"" if data is None else json.dumps(data).encode()
+            self.text = self.content.decode()
+
+        def json(self):
+            return self._data
+
+    def post_token(self, url, data=None, timeout=None):
+        if self.token_error:
+            return self.Resp(400, {"error": self.token_error})
+        out = {"access_token": "at", "expires_in": 3600}
+        if data.get("grant_type") == "authorization_code":
+            out["refresh_token"] = "rt"
+        return self.Resp(200, out)
+
+    def request(self, method, url, headers=None, timeout=None, json=None, params=None):
+        path = url.split("/calendar/v3", 1)[1]
+        self.calls.append((method, path))
+        parts = path.strip("/").split("/")
+        if method == "POST" and parts == ["calendars"]:
+            self.calendars["cal1"] = json
+            return self.Resp(200, {"id": "cal1", **json})
+        if method == "GET" and len(parts) == 2:
+            return self.Resp(200, {"id": parts[1]}) if parts[1] in self.calendars else self.Resp(404, {"error": {"message": "nf"}})
+        if parts[-1] == "events" and method == "GET":
+            return self.Resp(200, {"items": list(self.events.values())})
+        if parts[-1] == "events" and method == "POST":
+            if json["id"] in self.events or json["id"] in self.cancelled:
+                return self.Resp(409, {"error": {"message": "duplicate"}})
+            self.events[json["id"]] = json
+            return self.Resp(200, json)
+        eid = parts[-1]
+        if method == "PUT":
+            self.cancelled.discard(eid)
+            self.events[eid] = json
+            return self.Resp(200, json)
+        if method == "DELETE":
+            self.events.pop(eid, None)
+            self.cancelled.add(eid)
+            return self.Resp(204)
+        raise AssertionError((method, path))
+
+
+@pytest.fixture
+def google(coach_home, monkeypatch):
+    fake = FakeGoogle()
+    monkeypatch.setattr(gcal.requests, "post", fake.post_token)
+    monkeypatch.setattr(gcal.requests, "request", fake.request)
+    monkeypatch.setattr(gcal, "schedule_sync", lambda delay=3.0: None)
+    gcal._token_cache.clear()
+    gcal.save_client("123-abc.apps.googleusercontent.com", "GOCSPX-secret")
+    return fake
+
+
+def test_gcal_oauth_and_mirror(google):
+    url = gcal.auth_url("http://127.0.0.1:8787/")
+    assert "calendar.app.created" in url and "code_challenge=" in url and "access_type=offline" in url
+    state = url.split("state=")[1].split("&")[0]
+    with pytest.raises(gcal.GCalError):
+        gcal.finish_auth("code", "wrong-state")
+
+    ids = plan.apply_ops({"upsert": [
+        {"date": _iso(1), "sport": "bike", "title": "Sweet spot", "duration_min": 75, "intensity": "Z3",
+         "description": "3×12 min"},
+        {"date": _iso(2), "sport": "run", "title": "Easy", "duration_min": 40},
+        {"date": _iso(3), "sport": "rest", "title": "Odpoczynek"},
+    ]})
+    assert ids["added"] == 3
+    r = gcal.finish_auth("code", state)            # connects, creates calendar, first sync
+    assert r["ok"] and r["added"] == 2             # rest days are not exported
+    assert gcal.connected() and "cal1" in google.calendars
+    ev = next(e for e in google.events.values() if "Sweet spot" in e["summary"])
+    assert ev["start"] == {"date": _iso(1)} and ev["end"] == {"date": _iso(2)}
+    assert "75 min" not in ev["summary"] and "1 h 15 min" in ev["summary"] and "3×12 min" in ev["description"]
+
+    # nothing changed -> no writes
+    google.calls.clear()
+    assert gcal.sync_now()["added"] == 0 and not [c for c in google.calls if c[0] != "GET"]
+
+    sessions = {s["title"]: s for s in plan.plan_for_prompt()}
+    plan.apply_ops({"upsert": [{"id": sessions["Sweet spot"]["id"], "date": _iso(4)},
+                               {"id": sessions["Easy"]["id"], "status": "skipped"}]})
+    r = gcal.sync_now()
+    assert (r["updated"], r["deleted"]) == (1, 1)
+    assert next(iter(google.events.values()))["start"] == {"date": _iso(4)}
+
+    # un-skip: same event id comes back via 409 -> PUT
+    plan.apply_ops({"upsert": [{"id": sessions["Easy"]["id"], "status": "planned"}]})
+    r = gcal.sync_now()
+    assert r["added"] == 1 and len(google.events) == 2
+
+    # calendar deleted in Google -> recreated
+    google.calendars.clear()
+    google.events.clear()
+    assert gcal.sync_now()["added"] == 2 and "cal1" in google.calendars
+
+
+def test_gcal_revoked_token_and_schedule_guard(google, monkeypatch):
+    store.write_config({"gcal_refresh_token": "rt"})
+    google.token_error = "invalid_grant"
+    r = gcal.sync_now()
+    assert not r["ok"] and "połącz ponownie" in r["message"]
+    assert not gcal.connected() and gcal.status()["last_error"]
+    with pytest.raises(ValueError):
+        gcal.save_client("zle-id", "x")
+
+
+def test_plan_change_triggers_gcal_sync(coach_home, monkeypatch):
+    calls = []
+    monkeypatch.setattr(gcal, "schedule_sync", lambda delay=3.0: calls.append(1))
+    plan.apply_ops({"upsert": [{"date": _iso(1), "sport": "swim"}]})
+    plan.apply_ops({"upsert": []})
+    assert calls == [1]

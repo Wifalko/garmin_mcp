@@ -81,6 +81,9 @@ def apply_ops(ops: dict, source: str = "coach") -> dict:
         conn.commit()
     finally:
         conn.close()
+    if added or updated or deleted:
+        from garmin_mcp.coach import gcal  # mirror the change to Google Calendar, if connected
+        gcal.schedule_sync()
     return {"added": added, "updated": updated, "deleted": deleted, "errors": errors}
 
 

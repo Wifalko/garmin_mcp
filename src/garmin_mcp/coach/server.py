@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from garmin_mcp.coach import body, llm, metrics, plan, progress, store, sync, trainer
+from garmin_mcp.coach import body, gcal, llm, metrics, plan, progress, store, sync, trainer
 
 STATIC = Path(__file__).parent / "static"
 CTYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -42,6 +42,7 @@ def trainer_view(week_offset: int = 0) -> dict:
         "unplanned": plan.unplanned_activities(start, end, sessions),
         "progress": progress.build_progress(),
         "llm": llm.status(),
+        "gcal": gcal.status(),
     }
 
 
@@ -104,11 +105,42 @@ class Handler(BaseHTTPRequestHandler):
         host = (self.headers.get("Host") or "").split(":")[0].lower()
         return host in ("127.0.0.1", "localhost")
 
+    def _oauth_callback(self, q):
+        if "error" in q:
+            ok, msg = False, f"Google: {q['error'][0]}"
+        else:
+            try:
+                res = gcal.finish_auth(q["code"][0], q["state"][0])
+                ok, msg = res.get("ok", False), res.get("message", "")
+            except Exception as exc:
+                ok, msg = False, str(exc)
+        _log(("Kalendarz Google połączony. " if ok else "Kalendarz Google: ") + msg)
+        import html
+        page = f"""<!doctype html><meta charset="utf-8"><title>Kalendarz Google</title>
+<body style="font:16px system-ui;padding:40px;max-width:560px;margin:auto">
+<h2>{"✓ Połączono z Kalendarzem Google" if ok else "Nie udało się połączyć"}</h2>
+<p>{html.escape(msg)}</p><p><a href="/#trener">Wróć do dashboardu</a></p>
+{"<script>setTimeout(()=>location.href='/#trener',2500)</script>" if ok else ""}</body>"""
+        self._send(200, page.encode("utf-8"), CTYPES[".html"])
+
     def do_GET(self):
         if not self._host_ok():
             return self._send(403, b"forbidden", "text/plain")
         url = urlparse(self.path)
         path, q = url.path, parse_qs(url.query)
+        if path == "/" and "state" in q and ("code" in q or "error" in q):
+            return self._oauth_callback(q)
+        if path == "/oauth/google/start":
+            try:
+                port = self.server.server_address[1]
+                url = gcal.auth_url(f"http://127.0.0.1:{port}/")
+            except Exception as exc:
+                return self._send(400, str(exc).encode("utf-8"), "text/plain; charset=utf-8")
+            self.send_response(302)
+            self.send_header("Location", url)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path in ("/", "/index.html"):
             self._send(200, (STATIC / "index.html").read_bytes(), CTYPES[".html"])
         elif path.startswith("/static/"):
@@ -134,6 +166,8 @@ class Handler(BaseHTTPRequestHandler):
             self._guard(lambda: {"thread": thread, "messages": trainer.thread_messages(thread)})
         elif path == "/api/settings":
             self._json(llm.status())
+        elif path == "/api/gcal":
+            self._json(gcal.status())
         elif path == "/api/body":
             self._guard(lambda: {"scans": body.list_scans(), "analysis": body.analyse(),
                                  "labels": body.LABELS, "llm": llm.status()})
@@ -177,6 +211,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._guard(body.update_scan, int(req.get("id") or 0), req)
         if path == "/api/body/delete":
             return self._guard(body.delete_scan, int(req.get("id") or 0))
+        if path == "/api/gcal/client":
+            return self._guard(gcal.save_client, req.get("client_id"), req.get("client_secret"))
+        if path == "/api/gcal/sync":
+            return self._guard(gcal.sync_now)
+        if path == "/api/gcal/disconnect":
+            return self._guard(gcal.disconnect)
         if path == "/api/settings":
             allowed = {k: req[k] for k in ("anthropic_api_key", "model", "backend", "claude_cli_path") if k in req}
             store.write_config(allowed)
@@ -188,6 +228,10 @@ def _scheduler(interval_min: float) -> None:
     while True:
         _log("Synchronizacja z Garmin…")
         sync.sync(log=_log)
+        if gcal.connected():  # new activities may turn sessions into "done"
+            res = gcal.sync_now()
+            if not res.get("ok"):
+                _log("Kalendarz Google: " + res.get("message", ""))
         time.sleep(max(5.0, interval_min) * 60)
 
 

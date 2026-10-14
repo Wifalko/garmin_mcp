@@ -67,7 +67,7 @@ document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click
 async function loadTrainer() {
   try {
     C.view = await api(`/api/trainer?week=${C.week}`);
-    renderPlan(); renderProgress(); renderSettings(false);
+    renderPlan(); renderProgress(); renderSettings(false); renderGcal();
   } catch (e) {
     $("calendar").innerHTML = `<p class="err">Nie mogę pobrać danych trenera: ${esc(e.message)}</p>`;
   }
@@ -141,6 +141,58 @@ function renderSessionDetail() {
     await api("/api/plan", ops).catch(e => alert(e.message));
     loadTrainer();
   });
+}
+
+/* ---------- Google Calendar ---------- */
+let gcalOpen = false;
+$("gcalBtn").onclick = () => { gcalOpen = !gcalOpen; renderGcal(); };
+function renderGcal() {
+  const g = C.view && C.view.gcal, box = $("gcalBox");
+  if (!g) return;
+  $("gcalBtn").classList.toggle("on", g.connected);
+  $("gcalBtn").textContent = g.connected ? "📅 Kalendarz Google ✓" : "📅 Kalendarz Google";
+  box.hidden = !gcalOpen && !(g.connected && g.last_error);
+  if (box.hidden) return;
+  if (g.connected) {
+    box.innerHTML = `<h3>Kalendarz Google: połączono</h3>
+      <p style="margin:0 0 8px">Treningi z planu są w kalendarzu <b>„Trening”</b> jako wydarzenia całodniowe i aktualizują się same po każdej zmianie planu.
+      ${g.last_sync ? `Ostatnia synchronizacja: ${esc(g.last_sync.replace("T", " ").slice(0, 16))}. ${esc(g.last_message || "")}` : ""}</p>
+      ${g.last_error ? `<p class="err">${esc(g.last_error)}</p>` : ""}
+      <div class="btn-row"><button class="small primary" id="gcalSync">Synchronizuj teraz</button>
+      <button class="small ghost" id="gcalOff">Odłącz</button></div>`;
+    $("gcalSync").onclick = async () => {
+      $("gcalSync").disabled = true;
+      const r = await api("/api/gcal/sync", {}).catch(e => ({ message: e.message }));
+      C.view.gcal = await api("/api/gcal"); gcalOpen = true; renderGcal();
+      if (!r.ok) alert(r.message);
+    };
+    $("gcalOff").onclick = async () => {
+      if (!confirm("Odłączyć Kalendarz Google? Kalendarz „Trening” zostanie w Google — możesz go usunąć ręcznie.")) return;
+      C.view.gcal = await api("/api/gcal/disconnect", {}); renderGcal();
+    };
+    return;
+  }
+  box.innerHTML = `<h3>Treningi w Kalendarzu Google</h3>
+    <p style="margin:0">Jednorazowa konfiguracja (ok. 5 min) — potrzebny jest Twój własny klucz OAuth z Google Cloud:</p>
+    <ol>
+      <li>Wejdź na <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> i utwórz projekt (np. „Trener”).</li>
+      <li><i>APIs &amp; Services → Library</i> → <b>Google Calendar API</b> → <b>Enable</b>.</li>
+      <li><i>Google Auth Platform</i> (ekran zgody OAuth): typ <b>External</b>, nazwa aplikacji, Twój e-mail. W <i>Audience</i> kliknij <b>Publish app</b> („In production”) — inaczej Google wylogowuje co 7 dni.</li>
+      <li><i>Clients → Create client</i> → typ <b>Desktop app</b> → skopiuj <b>Client ID</b> i <b>Client secret</b> poniżej.</li>
+      <li>Kliknij „Połącz z Google”. Google ostrzeże, że aplikacja nie jest zweryfikowana — to Twoja własna aplikacja: <i>Zaawansowane → Przejdź do…</i>.</li>
+    </ol>
+    <label>Client ID</label><input id="gcalId" placeholder="….apps.googleusercontent.com" autocomplete="off">
+    <label>Client secret</label><input id="gcalSecret" type="password" placeholder="${g.configured ? "zapisany — wpisz nowy, aby zmienić" : "GOCSPX-…"}" autocomplete="off">
+    <p style="margin:0 0 8px">Aplikacja dostaje dostęp <b>tylko do kalendarza, który sama utworzy</b> („Trening”) — nie widzi Twoich innych kalendarzy.</p>
+    <div class="btn-row"><button class="small" id="gcalSave">Zapisz klucz</button>
+      ${g.configured ? `<a class="button primary small" href="/oauth/google/start">Połącz z Google</a>` : ""}</div>
+    ${g.last_error ? `<p class="err">${esc(g.last_error)}</p>` : ""}`;
+  $("gcalSave").onclick = async () => {
+    try {
+      C.view.gcal = await api("/api/gcal/client", { client_id: $("gcalId").value, client_secret: $("gcalSecret").value });
+      gcalOpen = true; renderGcal();
+    } catch (e) { alert(e.message); }
+  };
 }
 
 /* ---------- progress ---------- */
