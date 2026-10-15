@@ -168,7 +168,7 @@ function stepsHtml(steps) {
 }
 $("gpushBtn").onclick = async () => {
   const g = C.view.garmin_push;
-  if (!g.enabled && !confirm("Włączyć wysyłanie treningów do Garmin Connect?\n\nNadchodzące sesje (14 dni) pojawią się jako treningi „Trener: …” w Twoim kalendarzu Garmin i na zegarku. Zmiany planu będą je aktualizować.")) return;
+  if (!g.enabled && !confirm("Włączyć wysyłanie treningów do Garmin Connect?\n\nNadchodzące sesje (14 dni) pojawią się jako treningi „Coach: …” w Twoim kalendarzu Garmin i na zegarku. Zmiany planu będą je aktualizować.")) return;
   try {
     C.view.garmin_push = await api("/api/garmin-push", { enabled: !g.enabled });
     renderGpush();

@@ -160,6 +160,8 @@ def connect() -> sqlite3.Connection:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(plan)")}
     if "steps" not in cols:  # added after the first release
         conn.execute("ALTER TABLE plan ADD COLUMN steps TEXT")
+    if "name_en" not in cols:
+        conn.execute("ALTER TABLE plan ADD COLUMN name_en TEXT")
     return conn
 
 

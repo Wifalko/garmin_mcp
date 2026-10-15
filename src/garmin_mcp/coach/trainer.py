@@ -50,6 +50,8 @@ Zmiany w planie zapisujesz blokiem na samym KOŃCU odpowiedzi (dokładnie jeden 
   target (jeden): hr_zone 1–5 | hr_bpm [od, do] | power_pct_ftp [od, do] | power_zone 1–7 | power_w [od, do]
   (rower) | pace_km ["5:10", "5:00"] (bieg) | pace_100m ["1:55", "1:50"] (pływanie). "note" krótko, max 120 znaków.
   Opis ("description") dalej pisz po ludzku — "steps" jest dla zegarka.
+  Dodaj też "name_en": krótka angielska nazwa treningu na zegarek (np. "Sweet Spot 3x12", "Easy Run Z2",
+  "CSS 10x100"), a "note" w krokach pisz po angielsku (np. "steady, cadence 90"). "title" zostaje po polsku.
 - W tekście opisz krótko, co zmieniłeś i dlaczego. Nie przepisuj całego planu do tekstu — zawodnik widzi go w kalendarzu.
 - Jeśli profil zawodnika nie ma celu ani dostępnego czasu, zapytaj o to zanim ułożysz plan na dłużej niż tydzień.
 

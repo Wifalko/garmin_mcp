@@ -1,7 +1,7 @@
 """Push planned swim/bike/run sessions to Garmin Connect as structured workouts.
 
 Each upcoming session (today … +14 days) becomes a workout named
-"Trener: <title>" scheduled on its date, so it shows up on the watch.
+"Coach: <English name>" scheduled on its date, so it shows up on the watch.
 When the coach changes or deletes a session, the old workout is removed and,
 if needed, a new one is uploaded — tracked in the `garmin_workouts` table.
 
@@ -25,6 +25,7 @@ import json
 import re
 import threading
 import time
+import unicodedata
 
 from garmin_mcp.coach import store
 
@@ -34,7 +35,8 @@ SPORTS = {
     "swim": {"sportTypeId": 4, "sportTypeKey": "lap_swimming"},
 }
 STEP_TYPES = {"warmup": 1, "cooldown": 2, "interval": 3, "recovery": 4, "rest": 5}
-NAME_PREFIX = "Trener: "
+NAME_PREFIX = "Coach: "
+SPORT_EN = {"run": "Run", "bike": "Bike", "swim": "Swim"}
 DAYS_AHEAD = 14
 
 _lock = threading.Lock()
@@ -157,11 +159,30 @@ def _fallback_steps(session: dict) -> list[dict]:
              "target": {"hr_zone": int(zone.group(1))} if zone else None}]
 
 
+def english_name(session: dict) -> str:
+    """English workout name for Garmin: the coach's name_en, else built from the session."""
+    if session.get("name_en"):
+        name = str(session["name_en"])
+    else:
+        parts = [SPORT_EN.get(session["sport"], "Workout")]
+        m = session.get("duration_min")
+        if m:
+            m = int(round(m))
+            parts.append(f"{m // 60}h{m % 60:02d}" if m >= 60 else f"{m} min")
+        if session.get("intensity"):
+            parts.append(str(session["intensity"]))
+        name = " ".join(parts)
+    # plain ASCII: some watches render Polish diacritics poorly
+    name = unicodedata.normalize("NFKD", name.replace("ł", "l").replace("Ł", "L"))
+    name = "".join(c for c in name if not unicodedata.combining(c)).encode("ascii", "ignore").decode()
+    return (NAME_PREFIX + name.strip())[:80]
+
+
 def build_workout(session: dict) -> dict:
     sport = session["sport"]
     steps = session.get("steps") or _fallback_steps(session)
     workout = {
-        "workoutName": (NAME_PREFIX + (session.get("title") or sport))[:80],
+        "workoutName": english_name(session),
         "description": (session.get("description") or "")[:1000],
         "sportType": SPORTS[sport],
         "workoutSegments": [{"segmentOrder": 1, "sportType": SPORTS[sport],

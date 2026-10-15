@@ -11,7 +11,7 @@ from garmin_mcp.coach import store
 PLAN_SPORTS = ("swim", "bike", "run", "strength", "brick", "rest", "other")
 STATUSES = ("planned", "skipped", "done")
 WEEKDAYS_PL = ["pon", "wt", "śr", "czw", "pt", "sob", "nd"]
-_FIELDS = ("date", "sport", "title", "duration_min", "distance_km", "intensity", "description", "status")
+_FIELDS = ("date", "sport", "title", "name_en", "duration_min", "distance_km", "intensity", "description", "status")
 
 
 def _now() -> str:
@@ -149,6 +149,6 @@ def unplanned_activities(start: dt.date, end: dt.date, sessions: list[dict]) -> 
 def plan_for_prompt(days_back: int = 7, days_ahead: int = 28) -> list[dict]:
     today = dt.date.today()
     rows = list_plan(today - dt.timedelta(days=days_back), today + dt.timedelta(days=days_ahead))
-    keep = ("id", "date", "weekday", "sport", "title", "duration_min", "distance_km",
+    keep = ("id", "date", "weekday", "sport", "title", "name_en", "duration_min", "distance_km",
             "intensity", "description", "steps", "state")
     return [{k: r.get(k) for k in keep if r.get(k) is not None} for r in rows]
