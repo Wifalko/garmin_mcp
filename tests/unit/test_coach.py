@@ -589,3 +589,119 @@ def test_plan_change_triggers_gcal_sync(coach_home, monkeypatch):
     plan.apply_ops({"upsert": [{"date": _iso(1), "sport": "swim"}]})
     plan.apply_ops({"upsert": []})
     assert calls == [1]
+
+
+# --- push planned sessions to Garmin Connect -----------------------------------
+
+from garmin_mcp.coach import garmin_push  # noqa: E402
+
+
+class FakeWorkoutClient:
+    def __init__(self):
+        self.next_id, self.workouts, self.schedules, self.deleted, self.unscheduled = 100, {}, {}, [], []
+
+    def upload_workout(self, w):
+        self.next_id += 1
+        self.workouts[self.next_id] = w
+        return {"workoutId": self.next_id}
+
+    def schedule_workout(self, wid, date):
+        sid = wid + 5000
+        self.schedules[sid] = (wid, date)
+        return {"workoutScheduleId": sid}
+
+    def unschedule_workout(self, sid):
+        self.unscheduled.append(sid)
+        self.schedules.pop(sid, None)
+
+    def delete_workout(self, wid):
+        self.deleted.append(wid)
+        self.workouts.pop(wid, None)
+
+
+INTERVALS = [
+    {"type": "warmup", "duration_min": 15, "target": {"hr_zone": 2}},
+    {"type": "repeat", "count": 3, "steps": [
+        {"type": "interval", "duration_min": 12, "target": {"power_pct_ftp": [88, 92]}, "note": "sweet spot"},
+        {"type": "recovery", "duration_min": 5, "target": {"hr_zone": 1}}]},
+    {"type": "cooldown", "duration_min": 10},
+]
+
+
+def test_build_workout_targets():
+    w = garmin_push.build_workout({"sport": "bike", "title": "SS", "steps": INTERVALS, "description": "x"})
+    assert w["workoutName"] == "Trener: SS" and w["sportType"]["sportTypeId"] == 2
+    steps = w["workoutSegments"][0]["workoutSteps"]
+    assert [s["stepOrder"] for s in steps] == [1, 2, 5]
+    rep = steps[1]
+    assert rep["type"] == "RepeatGroupDTO" and rep["numberOfIterations"] == 3
+    assert rep["endCondition"]["conditionTypeId"] == 7
+    work = rep["workoutSteps"][0]
+    assert work["targetType"]["workoutTargetTypeKey"] == "power.zone"
+    assert (work["targetValueOne"], work["targetValueTwo"]) == (88.0, 92.0)
+    assert work["endConditionValue"] == 720.0 and work["description"] == "sweet spot"
+    assert steps[0]["zoneNumber"] == 2 and steps[2]["targetType"]["workoutTargetTypeId"] == 1
+
+    run = garmin_push.build_workout({"sport": "run", "title": "T", "steps": [
+        {"type": "interval", "distance_m": 1000, "target": {"pace_km": ["4:30", "4:20"]}}]})
+    st = run["workoutSegments"][0]["workoutSteps"][0]
+    assert st["endCondition"]["conditionTypeId"] == 3 and st["targetType"]["workoutTargetTypeKey"] == "pace.zone"
+    assert st["targetValueOne"] < st["targetValueTwo"] and abs(st["targetValueTwo"] - 1000 / 260) < 0.01
+
+    swim = garmin_push.build_workout({"sport": "swim", "title": "CSS", "steps": [
+        {"type": "repeat", "count": 10, "steps": [{"type": "interval", "distance_m": 100,
+                                                   "target": {"pace_100m": "1:50"}}]}]})
+    assert swim["poolLength"] == 25.0 and swim["sportType"]["sportTypeId"] == 4
+
+    fb = garmin_push.build_workout({"sport": "run", "title": "Easy", "duration_min": 45, "intensity": "Z2"})
+    one = fb["workoutSegments"][0]["workoutSteps"][0]
+    assert one["endConditionValue"] == 2700.0 and one["zoneNumber"] == 2
+
+    with pytest.raises(ValueError):
+        garmin_push.build_workout({"sport": "run", "steps": [
+            {"type": "interval", "target": {"pace_km": ["fast", "4:00"]}}]})
+
+
+def test_garmin_push_sync(coach_home, monkeypatch):
+    monkeypatch.setattr(garmin_push, "schedule_sync", lambda delay=4.0: None)
+    monkeypatch.setattr(gcal, "schedule_sync", lambda delay=3.0: None)
+    fake = FakeWorkoutClient()
+    assert not garmin_push.sync_now(fake)["ok"]          # disabled by default
+    garmin_push.set_enabled(True)
+
+    plan.apply_ops({"upsert": [
+        {"date": _iso(1), "sport": "bike", "title": "SS", "steps": INTERVALS},
+        {"date": _iso(2), "sport": "run", "title": "Easy", "duration_min": 40, "intensity": "Z2"},
+        {"date": _iso(3), "sport": "strength", "title": "Core"},          # not pushed
+        {"date": _iso(30), "sport": "run", "title": "Daleko"},            # beyond 14 days
+    ]})
+    r = garmin_push.sync_now(fake)
+    assert r["ok"] and r["added"] == 2 and len(fake.workouts) == 2
+    assert sorted(d for _, d in fake.schedules.values()) == [_iso(1), _iso(2)]
+    rows = {s["title"]: s for s in plan.plan_for_prompt(0, 40)}
+    assert rows["SS"]["steps"][1]["count"] == 3
+    assert set(garmin_push.status()["pushed_plan_ids"]) == {rows["SS"]["id"], rows["Easy"]["id"]}
+
+    assert garmin_push.sync_now(fake)["added"] == 0 and not fake.deleted   # unchanged
+
+    # move + change -> old workout removed, new one scheduled on the new date
+    plan.apply_ops({"upsert": [{"id": rows["SS"]["id"], "date": _iso(4)}]})
+    r = garmin_push.sync_now(fake)
+    assert r["updated"] == 1 and len(fake.deleted) == 1 and len(fake.workouts) == 2
+    assert _iso(4) in [d for _, d in fake.schedules.values()]
+
+    # skip one, delete the other -> both removed from Garmin
+    plan.apply_ops({"upsert": [{"id": rows["Easy"]["id"], "status": "skipped"}], "delete": [rows["SS"]["id"]]})
+    r = garmin_push.sync_now(fake)
+    assert r["removed"] == 2 and not fake.workouts
+
+    # upload failure is reported, not fatal
+    plan.apply_ops({"upsert": [{"date": _iso(1), "sport": "run", "title": "Zły", "steps": [
+        {"type": "interval", "target": {"pace_km": ["x", "y"]}}]}]})
+    r = garmin_push.sync_now(fake)
+    assert not r["ok"] and "Zły" in r["errors"][0] and garmin_push.status()["last_error"]
+
+
+def test_coach_prompt_documents_steps(coach_home):
+    p = trainer.system_prompt()
+    assert '"steps"' in p and "power_pct_ftp" in p and "{{" not in p

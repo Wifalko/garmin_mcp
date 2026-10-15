@@ -91,6 +91,20 @@ i ostatnie treningi.
   sam zapisuje zmiany w kalendarzu. Ten sam plan widzi Claude Desktop (`get_training_plan`,
   `update_training_plan`).
 
+## Treningi na zegarek (Garmin Connect)
+
+Przycisk **„⌚ Na zegarek”** w karcie planu włącza wysyłanie nadchodzących sesji (pływanie, rower,
+bieg — na 14 dni do przodu) do Garmin Connect jako treningi **„Trener: …”**, zaplanowane na swój
+dzień. Po synchronizacji zegarka trening jest w kalendarzu na zegarku z krokami i celami
+(strefa tętna, % FTP / waty, tempo).
+
+- Trener zapisuje do każdej sesji strukturę kroków (`steps`): rozgrzewka, powtórzenia, przerwy,
+  schłodzenie z celami. Sesja bez struktury trafia jako jeden krok z czasem i strefą z opisu.
+- Zmiana planu = stary trening usuwany z Garmina, nowy wysyłany. Usunięta lub pominięta sesja
+  znika z kalendarza Garmin. Treningi z przeszłości zostają.
+- Siła i zakładki (brick) na razie nie są wysyłane. Długość basenu dla pływania: 25 m
+  (zmienisz w `config.json`: `"pool_length_m": 50`).
+
 ## Kalendarz Google
 
 Treningi z planu mogą trafiać do Kalendarza Google jako wydarzenia całodniowe (bez godziny),

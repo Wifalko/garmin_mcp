@@ -147,8 +147,19 @@ def connect() -> sqlite3.Connection:
             fetched_at TEXT,
             data TEXT
         );
+        CREATE TABLE IF NOT EXISTS garmin_workouts (
+            plan_id INTEGER PRIMARY KEY,
+            workout_id INTEGER,
+            schedule_id INTEGER,
+            date TEXT,
+            hash TEXT,
+            pushed_at TEXT
+        );
         """
     )
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(plan)")}
+    if "steps" not in cols:  # added after the first release
+        conn.execute("ALTER TABLE plan ADD COLUMN steps TEXT")
     return conn
 
 

@@ -67,7 +67,7 @@ document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click
 async function loadTrainer() {
   try {
     C.view = await api(`/api/trainer?week=${C.week}`);
-    renderPlan(); renderProgress(); renderSettings(false); renderGcal();
+    renderPlan(); renderProgress(); renderSettings(false); renderGcal(); renderGpush();
   } catch (e) {
     $("calendar").innerHTML = `<p class="err">Nie mogę pobrać danych trenera: ${esc(e.message)}</p>`;
   }
@@ -90,7 +90,8 @@ function renderPlan() {
     html += `<div class="${cls}"><div class="day-h"><b>${DOW[i % 7]}</b><span>${ddmm(iso)}</span></div>`;
     for (const s of items.s) {
       const [stc, sym, lbl] = STATE_ICON[s.state] || STATE_ICON.planned;
-      const meta = [s.duration_min ? durMin(s.duration_min) : "", s.intensity || ""].filter(Boolean).join(" · ");
+      const onWatch = (C.view.garmin_push && C.view.garmin_push.pushed_plan_ids || []).includes(s.id);
+      const meta = [onWatch ? "⌚" : "", s.duration_min ? durMin(s.duration_min) : "", s.intensity || ""].filter(Boolean).join(" · ");
       html += `<button class="sess ${s.state} ${C.selectedSession === s.id ? "sel" : ""}" style="--sc:${planColor(s.sport)}" data-sid="${s.id}"
         title="${esc(PLAN_SPORT_PL[s.sport] || s.sport)} — ${lbl}"><span class="t">${esc(s.title || PLAN_SPORT_PL[s.sport])}</span>
         <span class="m"><span>${esc(meta)}</span><i class="st ${stc}" aria-label="${lbl}">${sym}</i></span></button>`;
@@ -126,6 +127,8 @@ function renderSessionDetail() {
       ${s.distance_km ? `<span>dystans <b>${s.distance_km} km</b></span>` : ""}
       ${s.intensity ? `<span>intensywność <b>${esc(s.intensity)}</b></span>` : ""}<span>status: <b>${lbl}</b></span></div>
     <div class="desc">${esc(s.description || "Brak opisu.")}</div>
+    ${stepsHtml(s.steps)}
+    ${(C.view.garmin_push.pushed_plan_ids || []).includes(s.id) ? `<p class="sub ok-text">⌚ Wysłane do Garmin Connect — trening jest w kalendarzu na zegarku.</p>` : ""}
     <div class="btn-row">
       ${s.activity ? `<button class="small primary" data-act="open">Omów wykonany trening</button>` : ""}
       <button class="small" data-act="ask">Zapytaj trenera o tę sesję</button>
@@ -141,6 +144,46 @@ function renderSessionDetail() {
     await api("/api/plan", ops).catch(e => alert(e.message));
     loadTrainer();
   });
+}
+
+/* ---------- workout steps & Garmin push ---------- */
+function targetTxt(t) {
+  if (!t) return "";
+  if (t.hr_zone) return `Z${t.hr_zone} tętna`;
+  if (t.hr_bpm) return `${t.hr_bpm[0]}–${t.hr_bpm[1]} bpm`;
+  if (t.power_pct_ftp) return `${t.power_pct_ftp[0]}–${t.power_pct_ftp[1]}% FTP`;
+  if (t.power_zone) return `strefa mocy ${t.power_zone}`;
+  if (t.power_w) return `${t.power_w[0]}–${t.power_w[1]} W`;
+  if (t.pace_km) return `${[].concat(t.pace_km).join("–")} /km`;
+  if (t.pace_100m) return `${[].concat(t.pace_100m).join("–")} /100 m`;
+  return "";
+}
+const STEP_PL = { warmup: "Rozgrzewka", interval: "Praca", recovery: "Przerwa", rest: "Odpoczynek", cooldown: "Schłodzenie" };
+function stepsHtml(steps) {
+  if (!steps || !steps.length) return "";
+  const one = s => s.type === "repeat"
+    ? `<li><b>${s.count}×</b><ul>${(s.steps || []).map(one).join("")}</ul></li>`
+    : `<li>${STEP_PL[s.type] || "Krok"}: <b>${s.duration_min ? durMin(s.duration_min) : s.distance_m ? s.distance_m + " m" : "do przycisku"}</b>${targetTxt(s.target) ? " · " + esc(targetTxt(s.target)) : ""}${s.note ? ` <span class="sub">— ${esc(s.note)}</span>` : ""}</li>`;
+  return `<div class="section-t">Struktura (na zegarek)</div><ul class="steps">${steps.map(one).join("")}</ul>`;
+}
+$("gpushBtn").onclick = async () => {
+  const g = C.view.garmin_push;
+  if (!g.enabled && !confirm("Włączyć wysyłanie treningów do Garmin Connect?\n\nNadchodzące sesje (14 dni) pojawią się jako treningi „Trener: …” w Twoim kalendarzu Garmin i na zegarku. Zmiany planu będą je aktualizować.")) return;
+  try {
+    C.view.garmin_push = await api("/api/garmin-push", { enabled: !g.enabled });
+    renderGpush();
+    if (C.view.garmin_push.enabled) setTimeout(loadTrainer, 8000);
+  } catch (e) { alert(e.message); }
+};
+function renderGpush() {
+  const g = C.view && C.view.garmin_push;
+  if (!g) return;
+  const b = $("gpushBtn");
+  b.classList.toggle("on", g.enabled);
+  b.textContent = g.enabled ? "⌚ Na zegarek ✓" : "⌚ Na zegarek";
+  b.title = g.enabled ? (g.last_error ? "Błąd: " + g.last_error : (g.last_message || "Włączone")) + " — kliknij, aby wyłączyć"
+                      : "Wysyłaj nadchodzące treningi do Garmin Connect (na zegarek)";
+  if (g.enabled && g.last_error) b.textContent = "⌚ Na zegarek ⚠";
 }
 
 /* ---------- Google Calendar ---------- */

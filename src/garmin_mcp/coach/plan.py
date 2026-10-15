@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from typing import Any
 
 from garmin_mcp.coach import store
@@ -35,6 +36,14 @@ def _clean(item: dict) -> dict:
                 out[k] = round(float(out[k]), 1)
             except (TypeError, ValueError):
                 out.pop(k)
+    if "steps" in item:
+        steps = item["steps"]
+        if isinstance(steps, str):
+            try:
+                steps = json.loads(steps)
+            except ValueError:
+                steps = None
+        out["steps"] = json.dumps(steps, ensure_ascii=False) if isinstance(steps, list) and steps else None
     return out
 
 
@@ -82,8 +91,9 @@ def apply_ops(ops: dict, source: str = "coach") -> dict:
     finally:
         conn.close()
     if added or updated or deleted:
-        from garmin_mcp.coach import gcal  # mirror the change to Google Calendar, if connected
+        from garmin_mcp.coach import garmin_push, gcal  # mirror the change, if enabled
         gcal.schedule_sync()
+        garmin_push.schedule_sync()
     return {"added": added, "updated": updated, "deleted": deleted, "errors": errors}
 
 
@@ -103,6 +113,7 @@ def list_plan(start: dt.date, end: dt.date) -> list[dict]:
     today = dt.date.today().isoformat()
     used: set[int] = set()
     for s in sessions:
+        s["steps"] = json.loads(s["steps"]) if s.get("steps") else None
         s["weekday"] = WEEKDAYS_PL[dt.date.fromisoformat(s["date"]).weekday()]
         want = ("bike", "run") if s["sport"] == "brick" else (s["sport"],)
         match = next((a for a in acts if a["date"] == s["date"] and a["sport"] in want
@@ -139,5 +150,5 @@ def plan_for_prompt(days_back: int = 7, days_ahead: int = 28) -> list[dict]:
     today = dt.date.today()
     rows = list_plan(today - dt.timedelta(days=days_back), today + dt.timedelta(days=days_ahead))
     keep = ("id", "date", "weekday", "sport", "title", "duration_min", "distance_km",
-            "intensity", "description", "state")
+            "intensity", "description", "steps", "state")
     return [{k: r.get(k) for k in keep if r.get(k) is not None} for r in rows]

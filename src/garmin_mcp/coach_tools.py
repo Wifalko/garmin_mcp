@@ -113,7 +113,14 @@ def register_tools(app):
         Args:
             upsert: Sessions to add or change. New: {"date": "YYYY-MM-DD", "sport":
                 "swim|bike|run|strength|brick|rest", "title", "duration_min", "distance_km",
-                "intensity" (e.g. "Z2"), "description" (warm-up / main set with zones / cool-down)}.
+                "intensity" (e.g. "Z2"), "description" (warm-up / main set with zones / cool-down),
+                "steps" (structured workout for the Garmin watch, swim/bike/run): list of
+                {"type": "warmup|interval|recovery|rest|cooldown", "duration_min" or "distance_m",
+                "target": {"hr_zone": 1-5 | "hr_bpm": [lo, hi] | "power_pct_ftp": [lo, hi] |
+                "power_zone": 1-7 | "power_w": [lo, hi] | "pace_km": ["5:10", "5:00"] |
+                "pace_100m": ["1:55", "1:50"]}, "note"} or {"type": "repeat", "count": n, "steps": [...]}}.
+                If the athlete enabled Garmin push, upcoming sessions are uploaded to Garmin
+                Connect and scheduled on their date automatically.
                 Change existing: include its "id" and only the changed fields; move = new "date";
                 "status" may be "planned", "skipped" or "done".
             delete: Session ids to remove.

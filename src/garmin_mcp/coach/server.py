@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from garmin_mcp.coach import body, gcal, llm, metrics, plan, progress, store, sync, trainer
+from garmin_mcp.coach import body, garmin_push, gcal, llm, metrics, plan, progress, store, sync, trainer
 
 STATIC = Path(__file__).parent / "static"
 CTYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -43,6 +43,7 @@ def trainer_view(week_offset: int = 0) -> dict:
         "progress": progress.build_progress(),
         "llm": llm.status(),
         "gcal": gcal.status(),
+        "garmin_push": garmin_push.status(),
     }
 
 
@@ -211,6 +212,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._guard(body.update_scan, int(req.get("id") or 0), req)
         if path == "/api/body/delete":
             return self._guard(body.delete_scan, int(req.get("id") or 0))
+        if path == "/api/garmin-push":
+            return self._guard(garmin_push.set_enabled, bool(req.get("enabled")))
+        if path == "/api/garmin-push/sync":
+            return self._guard(garmin_push.sync_now)
         if path == "/api/gcal/client":
             return self._guard(gcal.save_client, req.get("client_id"), req.get("client_secret"))
         if path == "/api/gcal/sync":
@@ -228,6 +233,10 @@ def _scheduler(interval_min: float) -> None:
     while True:
         _log("Synchronizacja z Garmin…")
         sync.sync(log=_log)
+        if garmin_push.enabled():
+            res = garmin_push.sync_now()
+            if res.get("errors") or not res.get("ok", True):
+                _log(res.get("message", ""))
         if gcal.connected():  # new activities may turn sessions into "done"
             res = gcal.sync_now()
             if not res.get("ok"):
