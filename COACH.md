@@ -94,7 +94,7 @@ i ostatnie treningi.
 ## Treningi na zegarek (Garmin Connect)
 
 Przycisk **„⌚ Na zegarek”** w karcie planu włącza wysyłanie nadchodzących sesji (pływanie, rower,
-bieg — na 14 dni do przodu) do Garmin Connect jako treningi **„Coach: …”** (angielskie nazwy), zaplanowane na swój
+bieg — na 14 dni do przodu) do Garmin Connect jako treningi z angielskimi nazwami (np. „Sweet Spot 3x12”), zaplanowane na swój
 dzień. Po synchronizacji zegarka trening jest w kalendarzu na zegarku z krokami i celami
 (strefa tętna, % FTP / waty, tempo).
 

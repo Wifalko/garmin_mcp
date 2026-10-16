@@ -630,12 +630,12 @@ INTERVALS = [
 
 def test_build_workout_targets():
     w = garmin_push.build_workout({"sport": "bike", "title": "SS", "steps": INTERVALS, "description": "x"})
-    assert w["workoutName"] == "Coach: Bike" and w["sportType"]["sportTypeId"] == 2
+    assert w["workoutName"] == "Bike" and w["sportType"]["sportTypeId"] == 2
     named = garmin_push.build_workout({"sport": "bike", "title": "Próg", "name_en": "Threshold 3x12", "steps": INTERVALS})
-    assert named["workoutName"] == "Coach: Threshold 3x12"
+    assert named["workoutName"] == "Threshold 3x12"
     auto = garmin_push.build_workout({"sport": "run", "title": "Łatwy bieg", "duration_min": 75, "intensity": "Z2–Z3"})
-    assert auto["workoutName"] == "Coach: Run 1h15 Z2Z3"
-    assert garmin_push.english_name({"sport": "swim", "name_en": "Łódź żółć"}) == "Coach: Lodz zolc"
+    assert auto["workoutName"] == "Run 1h15 Z2Z3"
+    assert garmin_push.english_name({"sport": "swim", "name_en": "Łódź żółć"}) == "Lodz zolc"
     steps = w["workoutSegments"][0]["workoutSteps"]
     assert [s["stepOrder"] for s in steps] == [1, 2, 5]
     rep = steps[1]

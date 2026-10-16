@@ -1,7 +1,7 @@
 """Push planned swim/bike/run sessions to Garmin Connect as structured workouts.
 
 Each upcoming session (today … +14 days) becomes a workout named
-"Coach: <English name>" scheduled on its date, so it shows up on the watch.
+"<English name>" scheduled on its date, so it shows up on the watch.
 When the coach changes or deletes a session, the old workout is removed and,
 if needed, a new one is uploaded — tracked in the `garmin_workouts` table.
 
@@ -35,7 +35,7 @@ SPORTS = {
     "swim": {"sportTypeId": 4, "sportTypeKey": "lap_swimming"},
 }
 STEP_TYPES = {"warmup": 1, "cooldown": 2, "interval": 3, "recovery": 4, "rest": 5}
-NAME_PREFIX = "Coach: "
+NAME_PREFIX = ""
 SPORT_EN = {"run": "Run", "bike": "Bike", "swim": "Swim"}
 DAYS_AHEAD = 14
 
